@@ -11,7 +11,7 @@ OLLAMA_MODEL = "llama3.1:latest"  # Change to your installed model (mistral, lla
 conn = psycopg2.connect(
     host="localhost",
     user="postgres",
-    password="Garv@gr897",
+    password="your_password",
     dbname="salesloss"
 )
 
@@ -20,7 +20,7 @@ class DataBaseOrm:
         self.conn = psycopg2.connect(
                     host="localhost",
                     user="postgres",
-                    password="Garv@gr897",
+                    password="your_password",
                     dbname="salesloss"
                 )
         self.cursor = self.conn.cursor(cursor_factory= DictCursor)
