@@ -1,9 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import TrendsPanel from './TrendsPanel';
+import HeatmapVisualization from './HeatmapVisualization';
+import AIReportsPanel from './AIReportsPanel';
 
 const API_URL = 'http://localhost:8000/api';
 
-function Dashboard() {
+function Dashboard({ setIsAuthenticated }) {
+  const navigate = useNavigate();
+  const [userRole, setUserRole] = useState('staff');
+  const [userName, setUserName] = useState('');
+  
   // --- State ---
   const [cameras, setCameras] = useState([]);
   const [selectedCamId, setSelectedCamId] = useState('');
@@ -25,6 +33,8 @@ function Dashboard() {
   // Data
   const [regions, setRegions] = useState([]);
   const [selectedRegionId, setSelectedRegionId] = useState('');
+  const [showTrends, setShowTrends] = useState(false);
+  const [showAIReports, setShowAIReports] = useState(false);
   const [analyticsData, setAnalyticsData] = useState(null);
   const [demographicsData, setDemographicsData] = useState(null);
   const [trackingStats, setTrackingStats] = useState(null);
@@ -35,8 +45,8 @@ function Dashboard() {
   const [currentShardIndex, setCurrentShardIndex] = useState(0);
   const [isPlayingAll, setIsPlayingAll] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState('');
-  const [videoScale, setVideoScale] = useState({ x: 1, y: 1 });
-  const [liveScale, setLiveScale] = useState({ x: 1, y: 1 });
+  const [videoScale, setVideoScale] = useState({ x: 1, y: 1, offsetX: 0, offsetY: 0 });
+  const [liveScale, setLiveScale] = useState({ x: 1, y: 1, offsetX: 0, offsetY: 0 });
 
   const videoRef = useRef(null);
   const liveImgRef = useRef(null);
@@ -45,6 +55,11 @@ function Dashboard() {
 
   // --- Effects ---
   useEffect(() => {
+    // Get user role from localStorage
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    setUserRole(user.role || 'staff');
+    setUserName(user.fullName || user.email || 'User');
+    
     fetchCameras();
     fetchRegions();
 
@@ -53,9 +68,30 @@ function Dashboard() {
       if (playbackRef.current) {
         const video = playbackRef.current;
         if (video.videoWidth) {
+          const containerWidth = video.clientWidth;
+          const containerHeight = video.clientHeight;
+          const videoAspect = video.videoWidth / video.videoHeight;
+          const containerAspect = containerWidth / containerHeight;
+          
+          let displayWidth, displayHeight, offsetX, offsetY;
+          
+          if (videoAspect > containerAspect) {
+            displayWidth = containerWidth;
+            displayHeight = containerWidth / videoAspect;
+            offsetX = 0;
+            offsetY = (containerHeight - displayHeight) / 2;
+          } else {
+            displayHeight = containerHeight;
+            displayWidth = containerHeight * videoAspect;
+            offsetX = (containerWidth - displayWidth) / 2;
+            offsetY = 0;
+          }
+          
           setVideoScale({
-            x: video.clientWidth / video.videoWidth,
-            y: video.clientHeight / video.videoHeight
+            x: displayWidth / video.videoWidth,
+            y: displayHeight / video.videoHeight,
+            offsetX: offsetX,
+            offsetY: offsetY
           });
         }
       }
@@ -68,9 +104,30 @@ function Dashboard() {
       if (liveImgRef.current) {
         const img = liveImgRef.current;
         if (img.naturalWidth) {
+          const containerWidth = img.clientWidth;
+          const containerHeight = img.clientHeight;
+          const imgAspect = img.naturalWidth / img.naturalHeight;
+          const containerAspect = containerWidth / containerHeight;
+          
+          let displayWidth, displayHeight, offsetX, offsetY;
+          
+          if (imgAspect > containerAspect) {
+            displayWidth = containerWidth;
+            displayHeight = containerWidth / imgAspect;
+            offsetX = 0;
+            offsetY = (containerHeight - displayHeight) / 2;
+          } else {
+            displayHeight = containerHeight;
+            displayWidth = containerHeight * imgAspect;
+            offsetX = (containerWidth - displayWidth) / 2;
+            offsetY = 0;
+          }
+          
           setLiveScale({
-            x: img.clientWidth / img.naturalWidth,
-            y: img.clientHeight / img.naturalHeight
+            x: displayWidth / img.naturalWidth,
+            y: displayHeight / img.naturalHeight,
+            offsetX: offsetX,
+            offsetY: offsetY
           });
         }
       }
@@ -210,7 +267,13 @@ function Dashboard() {
       // If binary, it's a frame
       if (event.data instanceof Blob) {
         const url = URL.createObjectURL(event.data);
-        setLiveFrame(url);
+        setLiveFrame(prev => {
+          // Revoke previous blob URL to prevent memory leak
+          if (prev && prev.startsWith('blob:')) {
+            URL.revokeObjectURL(prev);
+          }
+          return url;
+        });
       } else {
         // JSON status
         try {
@@ -219,6 +282,13 @@ function Dashboard() {
             alert("Processing Completed!");
             setIsProcessing(false);
             fetchShards(parseInt(selectedCamId));
+            // Clean up live frame
+            setLiveFrame(prev => {
+              if (prev && prev.startsWith('blob:')) {
+                URL.revokeObjectURL(prev);
+              }
+              return null;
+            });
           } else if (data.type === 'alert') {
             setAlerts(prev => [data, ...prev].slice(0, 5));
           }
@@ -229,6 +299,13 @@ function Dashboard() {
     ws.onclose = () => {
       console.log("WS Closed");
       setIsProcessing(false);
+      // Clean up live frame on close
+      setLiveFrame(prev => {
+        if (prev && prev.startsWith('blob:')) {
+          URL.revokeObjectURL(prev);
+        }
+        return null;
+      });
     };
 
     ws.onerror = (err) => {
@@ -241,6 +318,13 @@ function Dashboard() {
     if (wsRef.current) {
       wsRef.current.close();
       setIsProcessing(false);
+      // Clean up live frame
+      setLiveFrame(prev => {
+        if (prev && prev.startsWith('blob:')) {
+          URL.revokeObjectURL(prev);
+        }
+        return null;
+      });
     }
   };
 
@@ -326,6 +410,35 @@ function Dashboard() {
     setAlerts(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('isAuthenticated');
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
+
+  const handleExportCSV = async () => {
+    if (!selectedRegionId) {
+      alert('Please select a region first');
+      return;
+    }
+    try {
+      const response = await fetch(`http://localhost:8000/export/analytics/csv/${selectedRegionId}`);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `analytics_region_${selectedRegionId}_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Export failed');
+      console.error(err);
+    }
+  };
+
   // --- Render ---
   return (
     <div className="dashboard-container">
@@ -380,7 +493,12 @@ function Dashboard() {
 
       {/* Sidebar */}
       <div className="sidebar">
-        <div className="sidebar-header">QBMS Security</div>
+        <div className="sidebar-header">
+          <div>VisionGuard</div>
+          <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.8 }}>
+            {userName} ({userRole})
+          </div>
+        </div>
         
         <div className="sidebar-section">
           <h4>Cameras</h4>
@@ -414,13 +532,62 @@ function Dashboard() {
           ))}
         </div>
 
-        <div style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid #333' }}>
+        <div style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '2px solid var(--border-color)' }}>
+          <div style={{ 
+            marginBottom: '20px', 
+            padding: '16px',
+            background: 'var(--glass-bg)',
+            borderRadius: '12px',
+            border: '1px solid var(--border-subtle)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+          }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-hover))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '20px',
+              fontWeight: 'bold',
+              color: 'white',
+              boxShadow: '0 4px 12px rgba(83, 109, 254, 0.3)'
+            }}>
+              {userName ? userName.charAt(0).toUpperCase() : '?'}
+            </div>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <div style={{ fontWeight: '600', fontSize: '14px', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                {userName || 'User'}
+              </div>
+              <div style={{ 
+                fontSize: '11px', 
+                color: 'var(--text-secondary)',
+                textTransform: 'uppercase',
+                fontWeight: '600',
+                letterSpacing: '1px'
+              }}>
+                {userRole === 'admin' ? '👑 Admin' : '👤 Staff'}
+              </div>
+            </div>
+          </div>
           <button 
-            onClick={handleResetDatabase} 
-            style={{ backgroundColor: '#d32f2f', width: '100%' }}
+            onClick={handleLogout} 
+            style={{ marginBottom: '10px' }}
           >
-            Reset Database
+            🚪 Logout
           </button>
+          {userRole === 'admin' && (
+            <button 
+              onClick={handleResetDatabase} 
+              className="danger"
+              title="Admin only - This will delete all data"
+            >
+              ⚠️ Reset Database
+            </button>
+          )}
         </div>
       </div>
 
@@ -435,11 +602,44 @@ function Dashboard() {
               controls 
               autoPlay={isPlayingAll}
               style={{width: '100%', height: '100%', objectFit: 'contain'}}
+              onError={(e) => {
+                const video = e.target;
+                const error = video.error;
+                console.error('Video error:', error?.code, error?.message);
+                // MediaError codes: 1=ABORTED, 2=NETWORK, 3=DECODE, 4=SRC_NOT_SUPPORTED
+                if (error?.code === 4) {
+                  alert('Video format not supported by browser. The video may need to be re-encoded with H.264 codec.');
+                }
+              }}
               onLoadedMetadata={(e) => {
                 const video = e.target;
+                // Calculate actual displayed video size (accounting for objectFit: contain)
+                const containerWidth = video.clientWidth;
+                const containerHeight = video.clientHeight;
+                const videoAspect = video.videoWidth / video.videoHeight;
+                const containerAspect = containerWidth / containerHeight;
+                
+                let displayWidth, displayHeight, offsetX, offsetY;
+                
+                if (videoAspect > containerAspect) {
+                  // Video is wider - letterbox on top/bottom
+                  displayWidth = containerWidth;
+                  displayHeight = containerWidth / videoAspect;
+                  offsetX = 0;
+                  offsetY = (containerHeight - displayHeight) / 2;
+                } else {
+                  // Video is taller - letterbox on sides
+                  displayHeight = containerHeight;
+                  displayWidth = containerHeight * videoAspect;
+                  offsetX = (containerWidth - displayWidth) / 2;
+                  offsetY = 0;
+                }
+                
                 setVideoScale({
-                  x: video.clientWidth / video.videoWidth,
-                  y: video.clientHeight / video.videoHeight
+                  x: displayWidth / video.videoWidth,
+                  y: displayHeight / video.videoHeight,
+                  offsetX: offsetX,
+                  offsetY: offsetY
                 });
               }}
               onEnded={() => {
@@ -457,30 +657,38 @@ function Dashboard() {
             (() => {
               const r = regions.find(r => r.region_id === selectedRegionId);
               return (
-                <div 
-                  style={{
-                    position: 'absolute',
-                    border: '2px solid rgba(255, 0, 0, 0.8)',
-                    backgroundColor: 'rgba(255, 0, 0, 0.2)',
-                    left: (r.x1 * videoScale.x) + 'px',
-                    top: (r.y1 * videoScale.y) + 'px',
-                    width: ((r.x2 - r.x1) * videoScale.x) + 'px',
-                    height: ((r.y2 - r.y1) * videoScale.y) + 'px',
-                    pointerEvents: 'none'
-                  }}
-                >
-                  <span style={{
-                    position: 'absolute', 
-                    top: '-20px', 
-                    left: '0', 
-                    background: 'red', 
-                    color: 'white', 
-                    padding: '2px 5px', 
-                    fontSize: '12px'
-                  }}>
-                    {r.region_name}
-                  </span>
-                </div>
+                <>
+                  <div 
+                    style={{
+                      position: 'absolute',
+                      border: '2px solid rgba(255, 0, 0, 0.8)',
+                      backgroundColor: 'rgba(255, 0, 0, 0.2)',
+                      left: ((r.x1 * videoScale.x) + (videoScale.offsetX || 0)) + 'px',
+                      top: ((r.y1 * videoScale.y) + (videoScale.offsetY || 0)) + 'px',
+                      width: ((r.x2 - r.x1) * videoScale.x) + 'px',
+                      height: ((r.y2 - r.y1) * videoScale.y) + 'px',
+                      pointerEvents: 'none'
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', 
+                      top: '-20px', 
+                      left: '0', 
+                      background: 'red', 
+                      color: 'white', 
+                      padding: '2px 5px', 
+                      fontSize: '12px'
+                    }}>
+                      {r.region_name}
+                    </span>
+                  </div>
+                  {/* Heatmap Visualization */}
+                  <HeatmapVisualization 
+                    regionId={selectedRegionId} 
+                    shardId={currentVideoUrl ? currentVideoUrl.split('/').pop().split('.')[0] : null}
+                    videoScale={videoScale}
+                  />
+                </>
               );
             })()
           )}
@@ -510,14 +718,40 @@ function Dashboard() {
 
           {/* Analytics */}
           <div className="panel-card">
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px'}}>
               <h3>Region Analytics</h3>
-              <input 
-                type="date" 
-                value={dateFilter} 
-                onChange={e => setDateFilter(e.target.value)}
-                style={{padding: '5px', background: '#333', color: 'white', border: '1px solid #555'}}
-              />
+              <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                <button 
+                  onClick={handleExportCSV}
+                  disabled={!selectedRegionId}
+                  style={{
+                    backgroundColor: '#2e7d32',
+                    padding: '8px 15px',
+                    fontSize: '0.85rem',
+                    opacity: selectedRegionId ? 1 : 0.5,
+                    cursor: selectedRegionId ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  📥 Export CSV
+                </button>
+                <button 
+                  onClick={() => setShowTrends(!showTrends)}
+                  className="secondary"
+                  style={{padding: '8px 15px', fontSize: '0.85rem'}}
+                >
+                  {showTrends ? '📊 Hide Trends' : '📈 Show Trends'}
+                </button>
+                <button 
+                  onClick={() => setShowAIReports(!showAIReports)}
+                  style={{
+                    background: 'linear-gradient(135deg, #9c27b0, #673ab7)',
+                    padding: '8px 15px', 
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  {showAIReports ? '🤖 Hide AI Reports' : '🤖 AI Reports'}
+                </button>
+              </div>
             </div>
             
             {analyticsData ? (
@@ -581,6 +815,19 @@ function Dashboard() {
             )}
           </div>
 
+          {/* Historical Trends (conditional) */}
+          {showTrends && selectedRegionId && (
+            <TrendsPanel regionId={selectedRegionId} />
+          )}
+
+          {/* AI Reports Panel (conditional) */}
+          {showAIReports && (
+            <AIReportsPanel 
+              regionId={selectedRegionId} 
+              onClose={() => setShowAIReports(false)} 
+            />
+          )}
+
           {/* Annotation Tool */}
           <div className="panel-card" style={{gridColumn: '1 / -1'}}>
             <h3>Annotation Studio</h3>
@@ -631,9 +878,45 @@ function Dashboard() {
                        style={{width: '100%', height: '100%', objectFit: 'contain'}} 
                        onLoad={(e) => {
                          const img = e.target;
-                         setLiveScale({
-                           x: img.clientWidth / img.naturalWidth,
-                           y: img.clientHeight / img.naturalHeight
+                         // Only recalculate if dimensions have changed
+                         if (!img.naturalWidth || !img.naturalHeight) return;
+                         
+                         const containerWidth = img.clientWidth;
+                         const containerHeight = img.clientHeight;
+                         const imgAspect = img.naturalWidth / img.naturalHeight;
+                         const containerAspect = containerWidth / containerHeight;
+                         
+                         let displayWidth, displayHeight, offsetX, offsetY;
+                         
+                         if (imgAspect > containerAspect) {
+                           displayWidth = containerWidth;
+                           displayHeight = containerWidth / imgAspect;
+                           offsetX = 0;
+                           offsetY = (containerHeight - displayHeight) / 2;
+                         } else {
+                           displayHeight = containerHeight;
+                           displayWidth = containerHeight * imgAspect;
+                           offsetX = (containerWidth - displayWidth) / 2;
+                           offsetY = 0;
+                         }
+                         
+                         const newScaleX = displayWidth / img.naturalWidth;
+                         const newScaleY = displayHeight / img.naturalHeight;
+                         
+                         // Only update if values have changed (prevent unnecessary re-renders)
+                         setLiveScale(prev => {
+                           if (Math.abs(prev.x - newScaleX) > 0.001 || 
+                               Math.abs(prev.y - newScaleY) > 0.001 ||
+                               Math.abs((prev.offsetX || 0) - offsetX) > 0.5 ||
+                               Math.abs((prev.offsetY || 0) - offsetY) > 0.5) {
+                             return {
+                               x: newScaleX,
+                               y: newScaleY,
+                               offsetX: offsetX,
+                               offsetY: offsetY
+                             };
+                           }
+                           return prev;
                          });
                        }}
                      />
@@ -646,8 +929,8 @@ function Dashboard() {
                             position: 'absolute',
                             border: '2px solid rgba(0, 255, 0, 0.5)',
                             backgroundColor: 'rgba(0, 255, 0, 0.1)',
-                            left: (r.x1 * liveScale.x) + 'px',
-                            top: (r.y1 * liveScale.y) + 'px',
+                            left: ((r.x1 * liveScale.x) + (liveScale.offsetX || 0)) + 'px',
+                            top: ((r.y1 * liveScale.y) + (liveScale.offsetY || 0)) + 'px',
                             width: ((r.x2 - r.x1) * liveScale.x) + 'px',
                             height: ((r.y2 - r.y1) * liveScale.y) + 'px',
                             pointerEvents: 'none'

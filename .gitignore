@@ -1,0 +1,22 @@
+# Node.js dependencies
+node_modules/
+
+# Python virtual environments (if any)
+venv/
+.env/
+.venv/
+
+# Python bytecode cache (optional, but common)
+__pycache__/
+
+# Yarn/Pnpm lock files (optional, if you use them)
+yarn.lock
+pnpm-lock.yaml
+
+# OS/IDE files (optional, but recommended)
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Exclude these folders at the root (not inside DBMS5thEL)
+frontend/

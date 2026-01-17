@@ -51,11 +51,12 @@ def load_gender_classifier(weights_path):
         print(f"Error loading CNN weights: {e}")
         return None
 
-def process_video_shards(source, shard_duration, cam_id=1, output_dir="shards", model_path="yolo12s.pt", cnn_weights_path="../train/cnn_weights.pth", tracker_config="bytetrack.yaml", frame_callback=None):
+def process_video_shards(source, shard_duration, cam_id=1, output_dir="shards", model_path="yolo12s.pt", cnn_weights_path="../train/cnn_weights.pth", tracker_config="bytetrack.yaml", frame_callback=None, cancel_token=None):
     """
     Processes a video stream or file, splitting it into shards of a specific duration.
     Saves annotated video for each shard and yields tracking data.
     Uses a 2nd stage CNN for gender classification on 'person' detections.
+    cancel_token: threading.Event that when set, signals processing should stop.
     """
     
     if not os.path.exists(output_dir):
@@ -100,19 +101,42 @@ def process_video_shards(source, shard_duration, cam_id=1, output_dir="shards", 
 
     try:
         while True:
+            # Check for cancellation at start of each shard
+            if cancel_token and cancel_token.is_set():
+                print(f"Processing cancelled before starting new shard")
+                cap.release()
+                return
+                
             # Start a new shard
             shard_id = str(uuid.uuid4())
             shard_video_path = os.path.join(output_dir, f"{shard_id}.mp4")
             print(f"Starting Shard: {shard_id}")
             
             # Initialize VideoWriter
-            fourcc = cv2.VideoWriter_fourcc(*'avc1') 
-            out = cv2.VideoWriter(shard_video_path, fourcc, fps, (width, height))
+            # Use H264 codec for browser compatibility
+            # Try different codecs in order of browser compatibility
+            out = None
+            codecs_to_try = [
+                ('avc1', '.mp4'),   # H.264 - best browser compatibility
+                ('H264', '.mp4'),   # Alternative H.264 fourcc
+                ('mp4v', '.mp4'),   # MPEG-4 Part 2 - fallback
+                ('XVID', '.avi'),   # XVID - last resort
+            ]
             
-            if not out.isOpened():
-                print("avc1 failed, trying mp4v...")
-                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            for codec, ext in codecs_to_try:
+                if ext != '.mp4':
+                    shard_video_path = os.path.join(output_dir, f"{shard_id}{ext}")
+                fourcc = cv2.VideoWriter_fourcc(*codec)
                 out = cv2.VideoWriter(shard_video_path, fourcc, fps, (width, height))
+                if out.isOpened():
+                    print(f"Using codec: {codec}")
+                    break
+                out.release()
+            
+            if not out or not out.isOpened():
+                print("ERROR: Could not create VideoWriter with any codec!")
+                cap.release()
+                return
 
             shard_data = []
             shard_unique_tracks = {} # Map to store unique tracks in this shard
@@ -120,6 +144,13 @@ def process_video_shards(source, shard_duration, cam_id=1, output_dir="shards", 
             shard_active = True
             
             while shard_active:
+                # Check for cancellation
+                if cancel_token and cancel_token.is_set():
+                    print(f"Processing cancelled during shard {shard_id}")
+                    out.release()
+                    cap.release()
+                    return
+                    
                 # Check duration based on frame count
                 if shard_frame_count >= frames_per_shard:
                     print(f"Shard {shard_id} duration completed ({shard_frame_count} frames).")
@@ -249,7 +280,8 @@ def process_video_shards(source, shard_duration, cam_id=1, output_dir="shards", 
                             current_frame_tracks.append({
                                 "track_id": db_track_id,
                                 "bbox": bbox,
-                                "gender": gender
+                                "gender": gender,
+                                "frame_timestamp": frame_number / fps  # Video time in seconds
                             })
 
                             # --- Visualization ---
@@ -273,7 +305,13 @@ def process_video_shards(source, shard_duration, cam_id=1, output_dir="shards", 
                 out.write(annotated_frame)
 
                 if frame_callback:
-                    frame_callback(annotated_frame, current_frame_tracks)
+                    # frame_callback returns False to signal stop
+                    should_continue = frame_callback(annotated_frame, current_frame_tracks)
+                    if should_continue is False:
+                        print("Processing stopped by callback")
+                        out.release()
+                        cap.release()
+                        return
             
             # Prepare tracking data list
             tracking_data_list = []
