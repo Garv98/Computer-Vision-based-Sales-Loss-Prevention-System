@@ -1,6 +1,9 @@
 # Computer Vision-Based Sales Loss Prevention System
 
-This project is a Computer Vision-Based Retail Sales Opportunity Loss Prevention System. It includes a FastAPI backend for analytics, a Node.js backend for authentication, and a React frontend for the user interface.
+This project is a Computer Vision-Based Retail Sales Opportunity Loss Prevention System. It includes:
+- **FastAPI Backend**: For analytics and PostgreSQL integration.
+- **Node.js Backend**: For MongoDB-based authentication.
+- **React Frontend**: For the user interface.
 
 ## Prerequisites
 - Node.js (v16 or higher)
@@ -17,27 +20,8 @@ This project is a Computer Vision-Based Retail Sales Opportunity Loss Prevention
    cd Computer-Vision-based-Sales-Loss-Prevention-System/DBMS5thEL
    ```
 
-2. **Set Up the Backend**
-   - Navigate to the `backend/` folder:
-     ```bash
-     cd backend
-     ```
-   - Install dependencies:
-     ```bash
-     npm install
-     ```
-   - Create a `.env` file and configure the required environment variables (e.g., MongoDB URI).
-   - Start the backend server:
-     ```bash
-     node server.js
-     ```
-
-3. **Set Up the FastAPI Backend**
-   - Navigate to the `src/` folder:
-     ```bash
-     cd ../src
-     ```
-   - Create a virtual environment:
+2. **Create a Virtual Environment**
+   - At the root of the `DBMS5thEL` folder, create a Python virtual environment:
      ```bash
      python -m venv .venv
      ```
@@ -50,33 +34,68 @@ This project is a Computer Vision-Based Retail Sales Opportunity Loss Prevention
        ```bash
        source .venv/bin/activate
        ```
-   - Install dependencies:
+
+3. **Install Python Dependencies**
+   - Navigate to the `src/` folder:
+     ```bash
+     cd src
+     ```
+   - Install the required Python packages:
      ```bash
      pip install -r requirements.txt
      ```
-   - Start the FastAPI server:
-     ```bash
-     uvicorn main:app --reload
-     ```
 
-4. **Set Up the Frontend**
-   - Navigate to the `my-app/` folder:
+4. **Install Node.js Dependencies**
+   - For the Node.js backend:
      ```bash
-     cd ../my-app
-     ```
-   - Install dependencies:
-     ```bash
+     cd ../backend
      npm install
      ```
-   - Start the development server:
+   - For the React frontend:
      ```bash
+     cd ../my-app
+     npm install
+     ```
+
+---
+
+## Running the Application
+
+1. **Start the Node.js Backend**
+   - Open a terminal, activate the virtual environment, and navigate to the `backend/` folder:
+     ```bash
+     cd backend
+     node server.js
+     ```
+
+2. **Start the FastAPI Backend**
+   - Open another terminal, activate the virtual environment, and navigate to the `src/` folder:
+     ```bash
+     cd src
+     python api.py
+     ```
+
+3. **Start the React Frontend**
+   - Open a third terminal, activate the virtual environment, and navigate to the `my-app/` folder:
+     ```bash
+     cd my-app
      npm run dev
      ```
 
-## Usage
-- Access the frontend at `http://localhost:5173`.
-- The FastAPI backend runs at `http://127.0.0.1:8000`.
-- The Node.js backend runs at `http://localhost:3000`.
+---
+
+## Accessing the Application
+- **Frontend**: Open your browser and go to `http://localhost:5173`.
+- **FastAPI Backend**: Runs at `http://127.0.0.1:8000`.
+- **Node.js Backend**: Runs at `http://localhost:3000`.
+
+---
+
+## Notes
+- Ensure your `.env` files are properly configured for both the Node.js backend and FastAPI backend.
+- PostgreSQL and MongoDB Atlas must be running and accessible.
+
+---
 
 ## License
 This project is licensed under the MIT License.
