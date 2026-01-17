@@ -12,14 +12,6 @@ This project is a Computer Vision-Based Retail Sales Opportunity Loss Prevention
 - MongoDB Atlas account
 - Git
 
-## Installation
-
-1. **Clone the Repository**
-   ```bash
-   git clone https://github.com/Garv98/Computer-Vision-based-Sales-Loss-Prevention-System.git
-   cd Computer-Vision-based-Sales-Loss-Prevention-System/DBMS5thEL
-   ```
-
 ## Environment Variables
 
 The `backend/` folder requires a `.env` file to configure the MongoDB connection. Create a `.env` file in the `backend/` folder with the following content:
@@ -41,6 +33,15 @@ MONGODB_URI=mongodb+srv://user123:password123@cluster0.mongodb.net/mydatabase?re
 4. Replace `<database>` with the name of your database.
 
 Ensure the `.env` file is not committed to version control by adding it to your `.gitignore` file.
+
+
+## Installation
+
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/Garv98/Computer-Vision-based-Sales-Loss-Prevention-System.git
+   cd Computer-Vision-based-Sales-Loss-Prevention-System/DBMS5thEL
+   ```
 
 2. **Create a Virtual Environment**
    - At the root of the `DBMS5thEL` folder, create a Python virtual environment:
