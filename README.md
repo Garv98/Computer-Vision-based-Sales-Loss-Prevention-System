@@ -20,6 +20,28 @@ This project is a Computer Vision-Based Retail Sales Opportunity Loss Prevention
    cd Computer-Vision-based-Sales-Loss-Prevention-System/DBMS5thEL
    ```
 
+## Environment Variables
+
+The `backend/` folder requires a `.env` file to configure the MongoDB connection. Create a `.env` file in the `backend/` folder with the following content:
+
+```plaintext
+# MongoDB Connection String
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/<database>?retryWrites=true&w=majority
+```
+
+### Example:
+```plaintext
+MONGODB_URI=mongodb+srv://user123:password123@cluster0.mongodb.net/mydatabase?retryWrites=true&w=majority
+```
+
+### Instructions:
+1. Replace `<username>` with your MongoDB username.
+2. Replace `<password>` with your MongoDB password.
+3. Replace `<cluster-url>` with your MongoDB cluster URL (e.g., `cluster0.mongodb.net`).
+4. Replace `<database>` with the name of your database.
+
+Ensure the `.env` file is not committed to version control by adding it to your `.gitignore` file.
+
 2. **Create a Virtual Environment**
    - At the root of the `DBMS5thEL` folder, create a Python virtual environment:
      ```bash
